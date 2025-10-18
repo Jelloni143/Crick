@@ -1,33 +1,38 @@
 import os
-import requests
+import aiohttp
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-TOKEN = os.getenv("TOKEN")
-API_KEY = os.getenv("API_KEY")
+TOKEN = os.getenv("TOKEN")  # Telegram Bot Token
+API_KEY = os.getenv("API_KEY")  # Cricket API Key
 API_ENDPOINT = "https://api.cricketapi.com/v1/matches"
 
 # Start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Welcome to Cricket Live Score Bot! 🎉\n\n"
-        "Available commands:\n"
+        "Welcome to Cricket Live Score Bot! 🎉\n"
+        "Commands:\n"
         "/live - Get live cricket scores\n"
         "/matches - Get upcoming matches\n"
         "/help - Get help"
     )
 
+# Async HTTP fetch function
+async def fetch_json(url, headers):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers) as resp:
+            return await resp.json()
+
 # Live scores command
 async def live_scores(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        response = requests.get(API_ENDPOINT, headers={"Authorization": f"Bearer {API_KEY}"})
-        data = response.json()
+        data = await fetch_json(API_ENDPOINT, headers={"Authorization": f"Bearer {API_KEY}"})
         scores = ""
         for match in data.get("matches", []):
-            score_text = match.get('score', "Score not available")
+            score_text = match.get("score", "Score not available")
             scores += f"{match['team1']['name']} vs {match['team2']['name']}: {score_text}\n"
         if not scores:
             scores = "No live matches currently. 🏏"
@@ -38,11 +43,10 @@ async def live_scores(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Upcoming matches command
 async def upcoming_matches(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        response = requests.get(API_ENDPOINT, headers={"Authorization": f"Bearer {API_KEY}"})
-        data = response.json()
+        data = await fetch_json(API_ENDPOINT, headers={"Authorization": f"Bearer {API_KEY}"})
         matches_text = ""
         for match in data.get("matches", []):
-            date = match.get('date', "Date not available")
+            date = match.get("date", "Date not available")
             matches_text += f"{match['team1']['name']} vs {match['team2']['name']} on {date}\n"
         if not matches_text:
             matches_text = "No upcoming matches found. 🏏"
@@ -53,15 +57,16 @@ async def upcoming_matches(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Help command
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Available commands:\n"
         "/live - Get live cricket scores\n"
-        "/matches - Get upcoming matches"
+        "/matches - Get upcoming matches\n"
+        "/help - Show this help message"
     )
 
 # Main function
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
 
+    # Add handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("live", live_scores))
     app.add_handler(CommandHandler("matches", upcoming_matches))
